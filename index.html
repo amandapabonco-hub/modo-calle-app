@@ -490,6 +490,35 @@ body::after {
         </div>
       </div>
 
+      <!-- Nombre / Apellido / Correo -->
+      <div class="ob-row">
+        <div class="ob-field">
+          <label>Nombre</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="obFirstName" type="text"
+              placeholder="Tu nombre" autocomplete="given-name"
+              style="text-transform:capitalize">
+          </div>
+        </div>
+        <div class="ob-field">
+          <label>Apellido</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="obLastName" type="text"
+              placeholder="Tu apellido" autocomplete="family-name"
+              style="text-transform:capitalize">
+          </div>
+        </div>
+      </div>
+      <div class="ob-row">
+        <div class="ob-field" style="flex:1">
+          <label>Correo electrónico</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="obEmail" type="email"
+              placeholder="tu@correo.com" autocomplete="email">
+          </div>
+        </div>
+      </div>
+
       <div class="ob-row">
         <div class="ob-field">
           <label>Edad</label>
@@ -702,7 +731,7 @@ body::after {
           <span class="dash-profile-label">Mi perfil</span>
         </div>
       </div>
-      <div class="dash-headline">Come con <span>cabeza.</span></div>
+      <div class="dash-headline" id="dashGreeting">Come con <span>cabeza.</span></div>
       <div class="dash-sub">Tu guía de nutrición en modo calle — sin rollos, sin dietas raras. Solo lo que funciona.</div>
     </div>
     <div class="dash-divider"></div>
@@ -3316,7 +3345,6 @@ body::after {
   function calculateAndSave() {
     if (!selectedGoal || !selectedActivity) {
       console.warn('Selecciona objetivo y actividad'); return;
-      return;
     }
     var age       = parseFloat(document.getElementById('inputAge').value);
     var ft = parseFloat(document.getElementById('inputHeightFt').value)||0;
@@ -3341,7 +3369,15 @@ body::after {
     var targetProt = Math.round(weightLbs * protMultiplier);
     var targetFat  = Math.round((targetCal * 0.25) / 9);
 
+    var pfn2 = document.getElementById('profFirstName');
+    var pln2 = document.getElementById('profLastName');
+    var pem2 = document.getElementById('profEmail');
+    var fn2  = pfn2 ? pfn2.value.trim() : (userProfile ? userProfile.firstName||'' : '');
+    var ln2  = pln2 ? pln2.value.trim() : (userProfile ? userProfile.lastName ||'' : '');
+    var em2  = pem2 ? pem2.value.trim() : (userProfile ? userProfile.email    ||'' : '');
     userProfile = {
+      firstName: fn2, lastName: ln2, email: em2,
+      name: (fn2+' '+ln2).trim() || 'tú',
       age:age, sex:selectedSex, height:height,
       weight:weightLbs, goalWeight:goalLbs,
       activity:selectedActivity, goal:selectedGoal,
@@ -3384,6 +3420,17 @@ body::after {
       var saved = storeGet('lasesion_profile');
       if (!saved) return;
       userProfile = JSON.parse(saved);
+      if (!userProfile.firstName) userProfile.firstName = '';
+      if (!userProfile.lastName)  userProfile.lastName  = '';
+      if (!userProfile.email)     userProfile.email     = '';
+      if (!userProfile.name)      userProfile.name      = userProfile.firstName || 'tú';
+      // Pre-fill profile screen name inputs
+      var _pfn = document.getElementById('profFirstName');
+      var _pln = document.getElementById('profLastName');
+      var _pem = document.getElementById('profEmail');
+      if (_pfn) _pfn.value = userProfile.firstName;
+      if (_pln) _pln.value = userProfile.lastName;
+      if (_pem) _pem.value = userProfile.email;
       if (userProfile.age)          { var el = document.getElementById('inputAge');        if(el) el.value = userProfile.age; }
       if (userProfile.height)       { var el = document.getElementById('inputHeight');     if(el) el.value = userProfile.height; }
       if (userProfile.weight)       { var el = document.getElementById('inputWeight');     if(el) el.value = userProfile.weight; }
@@ -3399,6 +3446,14 @@ body::after {
     if (!userProfile || !userProfile.calories) return;
     var btn = document.getElementById('dashProfileBtn');
     if (btn) btn.classList.add('has-profile');
+
+    // Personalize greeting with first name
+    var greetEl = document.getElementById('dashGreeting');
+    if (greetEl && userProfile.firstName) {
+      var hour = new Date().getHours();
+      var timeGreet = hour < 12 ? '¡Buenos días' : hour < 18 ? '¡Buenas tardes' : '¡Buenas noches';
+      greetEl.innerHTML = timeGreet + ', <span>' + userProfile.firstName + '!</span>';
+    }
 
     var strip = document.getElementById('dashMacroStrip');
     if (strip) {
@@ -3545,34 +3600,56 @@ body::after {
   function lbsToKg(lbs) { return lbs * 0.453592; }
 
   function obCalculate() {
-    if (!obActivity) { showObError('Por favor selecciona tu nivel de actividad.'); return; }
+    // Defaults if user skipped a step
+    if (!obSex)      obSex      = 'female';
+    if (!obGoal)     obGoal     = 'lose';
+    if (!obActivity) obActivity = '1.375';
 
-    var age       = parseFloat(document.getElementById('obAge').value);
-    var ft        = parseFloat(document.getElementById('obHeightFt').value) || 0;
-    var ins       = parseFloat(document.getElementById('obHeightIn').value) || 0;
+    // Validate required fields
+    var ageEl    = document.getElementById('obAge');
+    var weightEl = document.getElementById('obWeight');
+    var ftEl     = document.getElementById('obHeightFt');
+    if (!ageEl.value || !weightEl.value || !ftEl.value) {
+      showObError('Por favor completa edad, estatura y peso antes de continuar.');
+      obShowSection('obStep1');
+      return;
+    }
+
+    var age       = parseFloat(document.getElementById('obAge').value)        || 30;
+    var ft        = parseFloat(document.getElementById('obHeightFt').value)   || 5;
+    var ins       = parseFloat(document.getElementById('obHeightIn').value)   || 6;
     var heightCm  = ftInToCm(ft, ins);
-    var weightLbs = parseFloat(document.getElementById('obWeight').value);
-    var goalLbs   = parseFloat(document.getElementById('obGoalWeight').value);
-    var activity  = parseFloat(obActivity);
+    var weightLbs = parseFloat(document.getElementById('obWeight').value)     || 160;
+    var goalLbs   = parseFloat(document.getElementById('obGoalWeight').value) || 140;
+    var activity  = parseFloat(obActivity)                                    || 1.375;
     var weightKg  = lbsToKg(weightLbs);
 
-    // Mifflin-St Jeor
-    if (!obSex) obSex = 'male';
+    if (!heightCm || heightCm < 100) heightCm = ftInToCm(ft || 5, ins || 6);
+
+    // Mifflin-St Jeor BMR
     var bmr = obSex === 'male'
       ? (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5
       : (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
 
     var tdee = Math.round(bmr * activity);
     var targetCal, protMult;
-    if (obGoal === 'lose')     { targetCal = tdee - 500; protMult = 1.0; }
-    else if (obGoal === 'gain'){ targetCal = tdee + 300; protMult = 0.9; }
-    else                       { targetCal = tdee;       protMult = 0.8; }
+    if      (obGoal === 'lose') { targetCal = tdee - 500; protMult = 1.0; }
+    else if (obGoal === 'gain') { targetCal = tdee + 300; protMult = 0.9; }
+    else                        { targetCal = tdee;       protMult = 0.8; }
 
+    targetCal = Math.max(1200, targetCal);
     var targetProt = Math.round(weightLbs * protMult);
     var targetFat  = Math.round((targetCal * 0.25) / 9);
 
+    // Read name fields
+    var firstName = ((document.getElementById('obFirstName') || {}).value || '').trim();
+    var lastName  = ((document.getElementById('obLastName')  || {}).value || '').trim();
+    var email     = ((document.getElementById('obEmail')     || {}).value || '').trim();
+
     // Save profile
     userProfile = {
+      firstName: firstName, lastName: lastName, email: email,
+      name: (firstName + ' ' + lastName).trim() || 'tú',
       age: age, sex: obSex, heightFt: ft, heightIn: ins, heightCm: heightCm,
       weight: weightLbs, goalWeight: goalLbs,
       activity: obActivity, goal: obGoal,
@@ -3590,6 +3667,12 @@ body::after {
     el = document.getElementById('obGoalTag');
     if (el) el.textContent = goalTexts[obGoal] || '';
 
+    // Personalize the results heading
+    var nameEl = document.getElementById('obResultName');
+    if (nameEl) {
+      nameEl.textContent = firstName ? '¡Hola, ' + firstName + '! Tu plan está listo.' : 'Tu plan está listo';
+    }
+
     var diffLbs = Math.abs(weightLbs - goalLbs);
     var weeks   = obGoal === 'lose' ? Math.round(diffLbs) : '—';
 
@@ -3604,17 +3687,18 @@ body::after {
       insights.push({icon:'🏆', text:'Usa <strong>Smart Picks</strong> para identificar las proteínas con mejor relación cal/prot.'});
     } else {
       insights.push({icon:'⚖️', text:'Con <strong>' + targetCal + ' calorías/día</strong> mantienes tu peso actual con tu nivel de actividad.'});
-      insights.push({icon:'🎯', text:'Apunta a <strong>' + targetProt + 'g de proteína</strong> diarios para mantener masa muscular y saciedad.'});
-      insights.push({icon:'📊', text:'Usa <strong>Smart Swaps y Picks</strong> para hacer mejores elecciones sin contar calorías todo el tiempo.'});
+      insights.push({icon:'🔍', text:'Usa <strong>Smart Swaps</strong> para mejorar la calidad de tu dieta sin cambiar las calorías.'});
+      insights.push({icon:'📊', text:'El <strong>Calorie Tracker</strong> te ayudará a verificar que estés en tu meta cada día.'});
     }
 
-    var container = document.getElementById('obInsights');
-    if (container) {
-      container.innerHTML = insights.map(function(ins) {
-        return '<div class="ob-insight"><div class="ob-insight-icon">' + ins.icon + '</div><div class="ob-insight-text">' + ins.text + '</div></div>';
+    var insEl = document.getElementById('obInsights');
+    if (insEl) {
+      insEl.innerHTML = insights.map(function(i) {
+        return '<div class="ob-insight"><span class="ob-insight-icon">' + i.icon + '</span><span class="ob-insight-text">' + i.text + '</span></div>';
       }).join('');
     }
 
+    // Show results
     obShowSection('obStep4');
   }
 
@@ -5983,4 +6067,26 @@ var foodDB = [
 </div>
 
 </body>
-</html>
+</html      <div class="ob-row">
+        <div class="ob-field">
+          <label>Nombre</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="profFirstName" type="text" autocomplete="off" placeholder="Tu nombre" autocomplete="given-name">
+          </div>
+        </div>
+        <div class="ob-field">
+          <label>Apellido</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="profLastName" type="text" autocomplete="off" placeholder="Tu apellido" autocomplete="family-name">
+          </div>
+        </div>
+      </div>
+      <div class="ob-row">
+        <div class="ob-field" style="flex:1">
+          <label>Correo electrónico</label>
+          <div class="ob-input-wrap">
+            <input class="ob-input" id="profEmail" type="email" autocomplete="off" placeholder="tu@correo.com" autocomplete="email">
+          </div>
+        </div>
+      </div>
+      >
